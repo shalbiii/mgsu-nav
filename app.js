@@ -25,20 +25,21 @@ const haptic = (t) => { try { tg.HapticFeedback.impactOccurred(t || "light"); } 
 const tick = () => { try { tg.HapticFeedback.selectionChanged(); } catch (e) {} };
 
 // Фирменная гамма: тёмно-синий логотипа, синий сайта, золото эмблемы
+// Гамма по эмблеме МГСУ: тёмно-синий #1D3B6F, синий #2E62B0, голубой #4FA3E0, много белого
 const PAL = dark ? {
-  bg: 0x061229, ground: 0x0a1934, grid1: 0x1d3360, grid2: 0x132648,
-  wall: "#23395f", win: "#33507e", winLit: "#ffd68c", roof: 0x3a5788, edge: 0x5a78ad, edgeOp: .5,
-  accent: 0x1f64c8, accentRoof: 0x3f86e8, floor: 0xf2b230, route: 0xffc440, start: 0x34d399,
-  target: 0xf2b230, glass: 0x5f93d8, park: 0x0c2a31, road: 0x081022, pave: 0x1d3256, dirt: 0x5a4636,
-  tree: 0x1f6b52, trunk: 0x5a4030, concrete: 0x8d97a8, crane: 0xf2b230, detour: 0xff8a3d, blocked: 0xf87171,
-  pitch: 0x17603f, hemiSky: 0x9fb4ff, hemiGround: 0x061229, hemi: .62, sun: .8,
+  bg: 0x0b1830, ground: 0x0f2142, grid1: 0x23406f, grid2: 0x18305a,
+  wall: "#2a4677", win: "#3c5f95", winLit: "#bfe0ff", roof: 0x4069a8, edge: 0x6f93c9, edgeOp: .5,
+  accent: 0x2e62b0, accentRoof: 0x4f9be0, floor: 0x6cb8f0, route: 0x6cc0f5, start: 0x3cc4e0,
+  target: 0x6cb8f0, glass: 0x6fa6e6, park: 0x12304a, road: 0x0a1428, pave: 0x24406c, dirt: 0x5c4c3c,
+  tree: 0x2f7d66, trunk: 0x5a4436, concrete: 0x93a2ba, crane: 0x6cb8f0, detour: 0xff8a3d, blocked: 0xf87171,
+  pitch: 0x226f55, hemiSky: 0xb6d4ff, hemiGround: 0x0b1830, hemi: .65, sun: .8,
 } : {
-  bg: 0xeef2f8, ground: 0xe2e8f1, grid1: 0xcfd8e6, grid2: 0xdbe2ec,
-  wall: "#fbfcfe", win: "#c6d3e8", winLit: "#c6d3e8", roof: 0xffffff, edge: 0xadbbd3, edgeOp: .95,
-  accent: 0x0f3c73, accentRoof: 0x2c64ad, floor: 0xf2b230, route: 0x0f3c73, start: 0x12a877,
-  target: 0xf2b230, glass: 0x9cc0ef, park: 0xd6ebdd, road: 0xc4cddb, pave: 0xf6f8fb, dirt: 0xc9b393,
-  tree: 0x4f9e70, trunk: 0x8a6a50, concrete: 0xb4bcc9, crane: 0xf2b230, detour: 0xf07a2a, blocked: 0xe5484d,
-  pitch: 0x6dbb85, hemiSky: 0xffffff, hemiGround: 0xb9c3d6, hemi: .82, sun: 1.0,
+  bg: 0xf3f7fc, ground: 0xe5eef9, grid1: 0xd2e0f2, grid2: 0xdde8f5,
+  wall: "#fbfdff", win: "#bcd6f2", winLit: "#bcd6f2", roof: 0xffffff, edge: 0xa9c1e0, edgeOp: .95,
+  accent: 0x2e62b0, accentRoof: 0x4fa3e0, floor: 0x4fa3e0, route: 0x2f8fe0, start: 0x169ec4,
+  target: 0x1d3b6f, glass: 0xa6cff5, park: 0xdcefe6, road: 0xcad7e8, pave: 0xffffff, dirt: 0xd6c4a6,
+  tree: 0x62aa82, trunk: 0x8a6e58, concrete: 0xbac4d4, crane: 0x2e62b0, detour: 0xf07a2a, blocked: 0xe5484d,
+  pitch: 0x8fcca8, hemiSky: 0xffffff, hemiGround: 0xbfd0e6, hemi: .84, sun: 1.0,
 };
 
 // ---------- поиск (как в navigator.py) ----------
@@ -177,10 +178,14 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(PAL.bg);
 scene.fog = new THREE.Fog(PAL.bg, 520, 1000);
 const camera = new THREE.PerspectiveCamera(36, 1, 1, 2500);
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-Object.assign(controls, { enableDamping: true, dampingFactor: .1, minPolarAngle: .05, maxPolarAngle: 1.22,
-  minDistance: 40, maxDistance: 620, screenSpacePanning: false, rotateSpeed: .45, zoomSpeed: .8, panSpeed: .7 });
-controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+// Управление как в картах: один палец / левая кнопка — двигать карту,
+// два пальца — масштаб и поворот, правая кнопка (или Shift) — поворот и наклон.
+const controls = new THREE.MapControls(camera, renderer.domElement);
+Object.assign(controls, { enableDamping: true, dampingFactor: .12, minPolarAngle: 0, maxPolarAngle: 1.2,
+  minDistance: 35, maxDistance: 650, screenSpacePanning: false, rotateSpeed: .5, zoomSpeed: 1.1, panSpeed: 1 });
+controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+if (controls.listenToKeyEvents) controls.listenToKeyEvents(window);
 
 scene.add(new THREE.HemisphereLight(PAL.hemiSky, PAL.hemiGround, PAL.hemi));
 const sun = new THREE.DirectionalLight(0xffffff, PAL.sun);
@@ -680,12 +685,71 @@ function framePts(pts, k, dir) {
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
   frame(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 0, { k, dir });
 }
+// ---------- кнопки и жесты камеры ----------
+const camDist = () => camera.position.distanceTo(controls.target);
+const camDir = () => camera.position.clone().sub(controls.target).normalize();
+const clampDist = (d) => Math.min(controls.maxDistance, Math.max(controls.minDistance, d));
+
+// точка на земле под пальцем/курсором
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+function groundAt(clientX, clientY) {
+  const r = renderer.domElement.getBoundingClientRect();
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera({ x: ((clientX - r.left) / r.width) * 2 - 1, y: -((clientY - r.top) / r.height) * 2 + 1 }, camera);
+  const p = new THREE.Vector3();
+  return ray.ray.intersectPlane(groundPlane, p) ? p : null;
+}
+// масштаб к точке: то, что под курсором, остаётся под курсором
+function zoomAt(clientX, clientY, f) {
+  const d = camDist(), nd = clampDist(d * f);
+  f = nd / d;
+  const p = groundAt(clientX, clientY) || controls.target.clone();
+  camera.position.sub(p).multiplyScalar(f).add(p);
+  controls.target.sub(p).multiplyScalar(f).add(p);
+}
+function zoomBy(f) { flyTo(controls.target.clone(), clampDist(camDist() * f), camDir(), 320); }
+function rotateBy(angle) {
+  const dir = camDir().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+  flyTo(controls.target.clone(), camDist(), dir, 420);
+}
+
 $("#t-home").onclick = () => { tick(); overview(true); };
 $("#t-top").onclick = () => {
   tick(); topView = !topView; $("#t-top").classList.toggle("on", topView);
-  const dist = camera.position.distanceTo(controls.target);
-  flyTo(controls.target.clone(), dist, topView ? new THREE.Vector3(0, 1, .02).normalize() : VIEW_DIR);
+  $("#t-top").querySelector("b").textContent = topView ? "3D" : "2D";
+  const dir = topView ? new THREE.Vector3(0, 1, .02).normalize() : (narrow() ? VIEW_DIR_NARROW : VIEW_DIR);
+  flyTo(controls.target.clone(), camDist(), dir, 600);
 };
+$("#t-in").onclick = () => { tick(); zoomBy(.6); };
+$("#t-out").onclick = () => { tick(); zoomBy(1.65); };
+$("#t-left").onclick = () => { tick(); rotateBy(-Math.PI / 4); };
+$("#t-right").onclick = () => { tick(); rotateBy(Math.PI / 4); };
+// компас: выровнять вид — фасад КМК с холлами к себе
+$("#t-north").onclick = () => {
+  tick();
+  const dir = camDir(), polar = Math.acos(Math.min(1, dir.y));
+  flyTo(controls.target.clone(), camDist(), new THREE.Vector3(0, Math.cos(polar), Math.sin(polar)), 500);
+};
+const needle = $("#t-north svg");
+
+// колесо мыши — масштаб к курсору (перехватываем раньше стандартного)
+host.addEventListener("wheel", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  fly = null;
+  const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+  zoomAt(e.clientX, e.clientY, Math.exp(Math.max(-120, Math.min(120, dy)) * .0016));
+  sheet.classList.add("peek");
+}, { capture: true, passive: false });
+
+// подсказка по жестам — один раз
+try {
+  if (!localStorage.getItem("nav-hint")) {
+    setTimeout(() => toast(matchMedia("(pointer: coarse)").matches
+      ? "Один палец — двигать карту · два — масштаб и поворот"
+      : "Тяни — двигать · правая кнопка — поворот · колесо — масштаб"), 1200);
+    localStorage.setItem("nav-hint", "1");
+  }
+} catch (e) {}
 
 // ---------- шторка ----------
 const sheet = $("#sheet"), sheetBody = $("#sheet-body");
@@ -704,7 +768,7 @@ function homeSheet() {
   const ids = ["КМК", "УЛК", "КПА", "УЛБ", "Ректорат", "Спорт"];
   const minis = ids.map((id) => { const p = C.places.find((x) => x.id === id); return p ?
     `<button class="mini" data-place="${id}">${id === "Спорт" ? "Спорт" : p.title.split(" ")[0]}<b>${id === "Спорт" ? "в обход" : (p.chips[0] || "")}</b></button>` : ""; }).join("");
-  setSheet("Навигатор МГСУ", "Найди аудиторию или нажми на корпус", "", `<div class="mini-grid">${minis}</div>`, false);
+  setSheet(`<img class="emb" src="emblem.png" alt="">Навигатор МГСУ`, "Найди аудиторию или нажми на корпус", "", `<div class="mini-grid">${minis}</div>`, false);
   sheetBody.querySelectorAll("[data-place]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); tick(); selectPlace(C.places.find((p) => p.id === b.dataset.place)); });
 }
 function resultSheet(loc) {
@@ -828,10 +892,26 @@ QUICK.forEach(([t, q, cls]) => {
 // жесты: пока крутишь карту — интерфейс полупрозрачный, шторка сворачивается
 controls.addEventListener("start", () => { document.body.classList.add("dragging"); sheet.classList.add("peek"); fly = null; });
 controls.addEventListener("end", () => document.body.classList.remove("dragging"));
-let down = null;
-renderer.domElement.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; });
+let down = null, lastTap = null, tapTimer = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
 renderer.domElement.addEventListener("pointerup", (e) => {
-  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 450) return;
+  const now = performance.now();
+  // двойной тап — приблизить в эту точку
+  if (lastTap && now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+    clearTimeout(tapTimer); lastTap = null;
+    const p = groundAt(e.clientX, e.clientY);
+    if (p) { haptic(); flyTo(p, clampDist(camDist() * .5), camDir(), 450); }
+    return;
+  }
+  lastTap = { x: e.clientX, y: e.clientY, t: now };
+  const cx = e.clientX, cy = e.clientY;
+  clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => pickAt(cx, cy), 260);
+});
+function pickAt(clientX, clientY) {
+  const e = { clientX, clientY };
   const r = renderer.domElement.getBoundingClientRect();
   const ray = new THREE.Raycaster();
   ray.setFromCamera({ x: ((e.clientX - r.left) / r.width) * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1 }, camera);
@@ -840,7 +920,7 @@ renderer.domElement.addEventListener("pointerup", (e) => {
     return !(focusKeys && m && m.opacity < .3);
   });
   if (hit) selectBlock(hit.object.userData.key);
-});
+}
 
 // ---------- вкладки ----------
 function showTab(name) {
@@ -884,7 +964,7 @@ const svg = (n) => `<svg class="i" viewBox="0 0 24 24">${ICON[n]}</svg>`;
     item.onclick = () => { tick(); selectPlace(p); };
     $(["КМК", "УЛК", "КПА", "УЛБ"].includes(p.id) ? "#pl-main" : sport ? "#pl-sport" : "#pl-other").appendChild(item);
   });
-  const colors = { "А": "#0F3C73", "Б": "#1F64C8", "В": "#12A877", "Г": "#D99A1E" };
+  const colors = { "А": "#1D3B6F", "Б": "#2E62B0", "В": "#169EC4", "Г": "#4FA3E0" };
   const desc = { "А": "Сразу за переходом из КМК · деканат ФМО", "Б": "Через А и Г, прямо", "В": "Через А и Г, налево", "Г": "Центральный, за корпусом А" };
   PARTS.forEach((k) => {
     const t = el("button", "tile", `<span class="ico" style="background:${colors[k]}">${k}</span>
@@ -896,19 +976,19 @@ const svg = (n) => `<svg class="i" viewBox="0 0 24 24">${ICON[n]}</svg>`;
 
 (function buildUseful() {
   const S = [
-    ["Туалеты", [["wc", "#1F64C8", "Холл 1", "У входа в КМК", ["Х1"]], ["wc", "#1F64C8", "Холл 2", "У входа в КМК", ["Х2"]],
-      ["wc", "#1F64C8", "Библиотека", "Рядом с Инфоцентром", ["НТБ"]], ["wc", "#1F64C8", "УЛК", "Внутри корпуса", ["УЛК"]],
-      ["wc", "#1F64C8", "Столовая", "Правый край КМК", ["СТОЛ"]]]],
+    ["Туалеты", [["wc", "#2E62B0", "Холл 1", "У входа в КМК", ["Х1"]], ["wc", "#2E62B0", "Холл 2", "У входа в КМК", ["Х2"]],
+      ["wc", "#2E62B0", "Библиотека", "Рядом с Инфоцентром", ["НТБ"]], ["wc", "#2E62B0", "УЛК", "Внутри корпуса", ["УЛК"]],
+      ["wc", "#2E62B0", "Столовая", "Правый край КМК", ["СТОЛ"]]]],
     ["Здоровье", [["plus", "#E5484D", "Здравпункт", "У перехода из КМК в корпус А", ["А"]],
-      ["pill", "#12A877", "Аптека", "Рядом со здравпунктом", ["А"]]]],
-    ["Справка", [["info", "#0F3C73", "Инфоцентр", "У главного входа, между Ректоратом и Библиотекой", ["РЕК", "НТБ"]],
-      ["cap", "#2C64AD", "Деканат ФМО", "Корпус А, УЛБ", ["А"]],
-      ["shield", "#5B6B86", "Военно-учётный стол", "«Свечка» · 4 этаж, каб. 404", ["РЕК"], 4],
-      ["door", "#D99A1E", "Приёмная комиссия", "В КМК, правее Холла 2", ["КМК"]]]],
+      ["pill", "#169EC4", "Аптека", "Рядом со здравпунктом", ["А"]]]],
+    ["Справка", [["info", "#1D3B6F", "Инфоцентр", "У главного входа, между Ректоратом и Библиотекой", ["РЕК", "НТБ"]],
+      ["cap", "#3B7FCB", "Деканат ФМО", "Корпус А, УЛБ", ["А"]],
+      ["shield", "#566C93", "Военно-учётный стол", "«Свечка» · 4 этаж, каб. 404", ["РЕК"], 4],
+      ["door", "#4FA3E0", "Приёмная комиссия", "В КМК, правее Холла 2", ["КМК"]]]],
     ["Спорт и отдых", [["ball", "#F07A2A", "Спорткомплекс", "За стройкой · только в обход", "СОК"],
       ["ball", "#F07A2A", "Манеж", "За стройкой · только в обход", "МАН"],
-      ["food", "#D99A1E", "Столовая «Грабли»", "За Холлом 2", ["СТОЛ"]],
-      ["book", "#1F64C8", "Библиотека", "МОЦОС — на 2 этаже", ["НТБ"]],
+      ["food", "#4FA3E0", "Столовая «Грабли»", "За Холлом 2", ["СТОЛ"]],
+      ["book", "#2E62B0", "Библиотека", "МОЦОС — на 2 этаже", ["НТБ"]],
       ["crane", "#F07A2A", "Стройка", "Позади КМК, прохода нет", ["СТРОЙ"]]]],
   ];
   const page = $("#useful");
@@ -984,6 +1064,7 @@ function loop() {
   const cx = Math.min(LIMIT.x1, Math.max(LIMIT.x0, tgt.x)), cz = Math.min(-LIMIT.y0, Math.max(-LIMIT.y1, tgt.z));
   if (cx !== tgt.x || cz !== tgt.z) { camera.position.x += cx - tgt.x; camera.position.z += cz - tgt.z; tgt.x = cx; tgt.z = cz; }
   controls.update();
+  needle.style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
   flows.forEach((f) => f.dots.forEach((d) => d.position.copy(f.path.getPointAt((d.userData.u + t * f.speed) % 1))));
   if (startRing) { const s = 1 + .35 * Math.sin(t * 4); startRing.scale.set(s, s, s); }
   if (floorPulse) floorPulse.material.opacity = .55 + .3 * Math.sin(t * 3.2);

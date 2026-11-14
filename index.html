@@ -9,23 +9,28 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-/* Фирменные цвета МГСУ: тёмно-синий #0F3C73 (логотип), синий #004A80 (сайт), золото эмблемы */
+/* Цвета по эмблеме МГСУ: тёмно-синий #1D3B6F на белом, синий #2E62B0, голубой #4FA3E0.
+   --gold оставлен по имени ради совместимости, теперь это голубой акцент. */
 :root {
-  --navy: #0F3C73; --blue: #004A80; --gold: #F2B230; --gold-ink: #0A1E46;
-  --bg: #EEF2F8; --card: #FFFFFF; --card-2: #F1F4F9; --text: #0B1A33; --muted: #7C889E;
-  --line: rgba(15, 60, 115, .09); --accent: var(--navy); --accent-ink: #fff;
-  --green: #12A877; --orange: #F07A2A; --red: #E5484D;
-  --glass: rgba(255, 255, 255, .82); --shadow: 0 6px 22px rgba(15, 40, 90, .12);
+  --navy: #1D3B6F; --blue: #2E62B0; --gold: #4FA3E0; --gold-ink: #FFFFFF; --sky-soft: #E4F0FC;
+  --bg: #F3F7FC; --card: #FFFFFF; --card-2: #EEF4FB; --text: #11234A; --muted: #7487A8;
+  --line: rgba(29, 59, 111, .09); --accent: var(--navy); --accent-ink: #fff;
+  --green: #169EC4; --orange: #F07A2A; --red: #E5484D;
+  --glass: rgba(255, 255, 255, .86); --shadow: 0 6px 22px rgba(29, 59, 111, .12);
   --tab: var(--navy); --tab-text: #FFFFFF;
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 :root[data-theme="dark"] {
-  --bg: #061229; --card: #0E1D3A; --card-2: #142748; --text: #EAF0FA; --muted: #8C9AB8;
+  --bg: #0B1830; --card: #13254A; --card-2: #1A3058; --text: #EAF1FB; --muted: #91A3C4; --sky-soft: #1E3963;
+  --gold: #6CB8F0; --gold-ink: #0B1830;
   --line: rgba(255, 255, 255, .08); --accent: var(--gold); --accent-ink: var(--gold-ink);
-  --green: #34D399; --orange: #FF8A3D; --red: #F87171;
-  --glass: rgba(10, 24, 50, .8); --shadow: 0 6px 22px rgba(0, 0, 0, .4);
+  --green: #3CC4E0; --orange: #FF8A3D; --red: #F87171;
+  --glass: rgba(15, 32, 64, .84); --shadow: 0 6px 22px rgba(0, 0, 0, .4);
   --tab: var(--gold); --tab-text: var(--gold-ink);
 }
+.emb { height: 26px; width: auto; vertical-align: -5px; margin-right: 8px; }
+:root[data-theme="dark"] .emb { filter: brightness(0) invert(1); }
+.loader .emb-big { position: absolute; height: 54px; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font-family: Onest, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -62,7 +67,7 @@ svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-widt
 .lbl.dim { opacity: .3; }
 .lbl.far { opacity: .0; pointer-events: none; }
 .pin { pointer-events: none; background: var(--gold); color: var(--gold-ink); font-weight: 800; font-size: 15px;
-  padding: 4px 11px; border-radius: 11px; box-shadow: 0 6px 18px rgba(242, 178, 48, .5); white-space: nowrap; }
+  padding: 4px 11px; border-radius: 11px; box-shadow: 0 6px 18px rgba(79, 163, 224, .45); white-space: nowrap; }
 .pin::after { content: ""; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
   border: 6px solid transparent; border-top-color: var(--gold); border-bottom: 0; }
 .pin.start { background: var(--green); color: #032318; font-size: 11px; padding: 3px 8px; border-radius: 8px;
@@ -88,9 +93,18 @@ body.dragging .ui { opacity: .35; }
   display: inline-flex; align-items: center; gap: 5px; }
 .chip.sport { color: var(--orange); }
 
-.tools { position: absolute; right: 10px; top: 104px; display: flex; flex-direction: column; gap: 6px; }
-.tool { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: var(--text); }
+.tools { position: absolute; right: 10px; top: 104px; display: flex; flex-direction: column; gap: 8px; }
+.tool { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--text); }
+.tool:active, .tg button:active { transform: scale(.94); }
+.tool b { font-size: 12px; font-weight: 800; letter-spacing: .02em; }
 .tool.on { background: var(--accent); color: var(--accent-ink); }
+.tg { display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; }
+.tg button { width: 40px; height: 38px; display: grid; place-items: center; color: var(--text); }
+.tg button + button { border-top: 1px solid var(--line); }
+.tg.row2 { flex-direction: row; }
+.tg.row2 button { width: 20px; }
+.tg.row2 button + button { border-top: 0; border-left: 1px solid var(--line); }
+#t-north svg { transition: transform .08s linear; }
 
 .floors { position: absolute; left: 10px; top: 104px; display: flex; flex-direction: column; gap: 4px; padding: 5px;
   border-radius: 14px; max-height: calc(100vh - 330px); overflow-y: auto; transition: opacity .25s; }
@@ -159,9 +173,9 @@ body.dragging .ui { opacity: .35; }
 .tile .t { font-weight: 800; font-size: 14px; margin-top: auto; padding-top: 10px; }
 .tile .d { color: var(--muted); font-size: 11px; font-weight: 500; margin-top: 2px; line-height: 1.3; }
 .hero { border-radius: 22px; padding: 18px; color: #fff; position: relative; overflow: hidden;
-  background: radial-gradient(120% 140% at 100% 0%, #1F5FAF 0%, #0F3C73 45%, #0A2A55 100%); }
+  background: radial-gradient(120% 140% at 100% 0%, #4FA3E0 0%, #2E62B0 40%, #1D3B6F 100%); }
 .hero::after { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%;
-  border: 10px solid rgba(242, 178, 48, .55); }
+  border: 10px solid rgba(140, 200, 248, .5); }
 .hero h3 { margin: 0; font-size: 19px; font-weight: 800; }
 .hero p { margin: 4px 0 0; opacity: .85; font-size: 13px; max-width: 75%; }
 .hero .big { font-size: 58px; font-weight: 800; letter-spacing: -.03em; line-height: 1; margin-top: 12px; }
@@ -190,7 +204,7 @@ body.dragging .ui { opacity: .35; }
 </style>
 </head>
 <body>
-<div class="loader" id="loader"><div class="ring"></div></div>
+<div class="loader" id="loader"><img class="emb-big" src="emblem.png" alt=""><div class="ring" style="width:96px;height:96px"></div></div>
 
 <!-- Карта -->
 <section class="screen active" id="tab-map">
@@ -205,8 +219,17 @@ body.dragging .ui { opacity: .35; }
     <div class="chips" id="quick"></div>
   </div>
   <div class="tools ui">
+    <button class="tool glass" id="t-north" title="Выровнять: фасад к себе"><svg class="i" viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M12 2.5 8.2 12h7.6z" fill="#E5484D" stroke="#E5484D"/><path d="M12 21.5 15.8 12H8.2z" fill="currentColor" opacity=".35" stroke="none"/></svg></button>
+    <button class="tool glass" id="t-top" title="2D / 3D"><b>2D</b></button>
+    <div class="tg glass">
+      <button id="t-in" title="Приблизить"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="t-out" title="Отдалить"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    </div>
+    <div class="tg glass row2">
+      <button id="t-left" title="Повернуть влево"><svg class="i" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+      <button id="t-right" title="Повернуть вправо"><svg class="i" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+    </div>
     <button class="tool glass" id="t-home" title="Обзор"><svg class="i" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></svg></button>
-    <button class="tool glass" id="t-top" title="Вид сверху"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 12h16M12 4v16"/></svg></button>
   </div>
   <div class="floors glass hidden ui" id="floors"></div>
   <div class="sheet peek ui" id="sheet"><div class="grab"></div><div id="sheet-body"></div></div>
