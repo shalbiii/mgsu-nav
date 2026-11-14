@@ -825,25 +825,30 @@ function frame(x0, y0, x1, y1, hgt, opts) {
     if (out) Object.assign(out, { bx0, bx1, by0, by1 });
     return bx0 >= sr.x0 && bx1 <= sr.x1 && by0 >= sr.y0 && by1 <= sr.y1;
   };
-  let center = V((x0 + x1) / 2, (y0 + y1) / 2, 0), dist = 200;
+  const base = V((x0 + x1) / 2, (y0 + y1) / 2, 0);
   const right = new THREE.Vector3(), fwd = new THREE.Vector3(), b = {};
-  const fitDist = () => {                          // минимальное расстояние, при котором всё влезает
-    let lo = 25, hi = 3000;
-    for (let i = 0; i < 26; i++) { const mid = (lo + hi) / 2; if (fits(center, mid)) hi = mid; else lo = mid; }
-    return hi;
+  // Центр, при котором картинка стоит посередине свободной области на расстоянии d.
+  // Раньше расстояние подбиралось до центровки: объект «не влезал» ни на каком расстоянии,
+  // поиск уходил в максимум, сдвиг перелетал — и кадр прилипал к верхнему краю.
+  const centerAt = (d) => {
+    const c = base.clone();
+    for (let i = 0; i < 8; i++) {
+      fits(c, d, b);
+      const ex = ((b.bx0 + b.bx1) - (sr.x0 + sr.x1)) / 2, ey = ((b.by0 + b.by1) - (sr.y0 + sr.y1)) / 2;
+      if (Math.abs(ex) < .005 && Math.abs(ey) < .005) break;
+      right.setFromMatrixColumn(cam.matrixWorld, 0).setY(0).normalize();
+      fwd.copy(dir).negate().setY(0).normalize();     // «вверх по экрану» на земле
+      const halfH = d * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+      c.add(right.multiplyScalar(ex * halfH * cam.aspect)).add(fwd.multiplyScalar(ey * halfH / Math.max(.35, dir.y)));
+    }
+    return c;
   };
-  for (let iter = 0; iter < 6; iter++) {
-    dist = fitDist();
-    // сдвигаем центр так, чтобы картинка встала по центру свободной области
-    fits(center, dist, b);
-    const ex = ((b.bx0 + b.bx1) - (sr.x0 + sr.x1)) / 2, ey = ((b.by0 + b.by1) - (sr.y0 + sr.y1)) / 2;
-    if (Math.abs(ex) < .01 && Math.abs(ey) < .01) break;
-    right.setFromMatrixColumn(cam.matrixWorld, 0).setY(0).normalize();
-    fwd.copy(dir).negate().setY(0).normalize();     // «вверх по экрану» на земле
-    const halfH = dist * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-    center.add(right.multiplyScalar(ex * halfH * cam.aspect)).add(fwd.multiplyScalar(ey * halfH / Math.max(.35, dir.y)));
-  }
-  dist = fitDist() * (opts.k && opts.k > 1 ? 1 + (opts.k - 1) * .15 : 1);
+  // минимальное расстояние, при котором отцентрованная картинка целиком влезает
+  let lo = 20, hi = 3000;
+  for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (fits(centerAt(mid), mid)) hi = mid; else lo = mid; }
+  // не ближе minDistance — иначе OrbitControls сам отодвинет камеру и собьёт центровку
+  const dist = Math.max(controls.minDistance, hi * (opts.k && opts.k > 1 ? 1 + (opts.k - 1) * .15 : 1));
+  const center = centerAt(dist);
   // в узком окне вписать маршрут можно только издалека — не даём ограничению масштаба обрезать кадр
   if (dist > controls.maxDistance) controls.maxDistance = Math.ceil(dist * 1.15);
   flyTo(center, dist, dir);
@@ -865,7 +870,8 @@ function frameKeys(keys) {
 }
 function framePts(pts, k, dir) {
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-  frame(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 0, { k, dir });
+  const top = Math.max(0, ...pts.map((p) => p[2] || 0));
+  frame(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), top ? top + 3 : 0, { k, dir });
 }
 // ---------- кнопки и жесты камеры ----------
 const camDist = () => camera.position.distanceTo(controls.target);
@@ -1062,7 +1068,9 @@ function search(text) {
   const pts = routePoints(loc);
   showRoute(pts, loc.number);
   resultSheet(loc);
-  framePts(pts, 1.25);
+  // в кадр — весь корпус с маршрутом, как на картинке бота, а не только отрезок маршрута
+  const bb = blocks[key] && blocks[key].bb;
+  framePts(bb ? pts.concat([[bb.x0, bb.y0, 0], [bb.x1, bb.y1, 0]]) : pts, 1.25);
   haptic("medium");
   if (document.activeElement) document.activeElement.blur();
 }
