@@ -309,10 +309,30 @@ function bbox(poly) {
   const xs = poly.map((p) => p[0]), ys = poly.map((p) => p[1]);
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
 }
+const HALL_H = X.hallH || 4.4;
 function blockHeight(b) {
   if (b.kind === "construction") return 4 * FH;
   if (b.kind === "arena") return b.floors * FH + X.arenaRise;
+  if (b.kind === "hall") return HALL_H;
+  if (b.kind === "tower") return b.floors * FH + 3;
   return b.floors * FH;
+}
+const hex = (c) => "#" + c.toString(16).padStart(6, "0");
+// надпись на холсте → текстура для плоскости на фасаде
+function textPlane(text, wUnits, hUnits, color, vertical) {
+  const c = document.createElement("canvas");
+  c.width = vertical ? 128 : 2048; c.height = vertical ? 512 : 64;
+  const g = c.getContext("2d");
+  g.fillStyle = color; g.textAlign = "center"; g.textBaseline = "middle";
+  if (vertical) {
+    g.font = "800 104px Onest, Arial, sans-serif";
+    [...text].forEach((ch, i) => g.fillText(ch, 64, 64 + i * 128));
+  } else {
+    g.font = "800 46px Onest, Arial, sans-serif";
+    g.fillText(text.split("").join(String.fromCharCode(8202)), 1024, 34, 2030);
+  }
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return new THREE.Mesh(new THREE.PlaneGeometry(wUnits, hUnits), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
 }
 function edges(mesh) {
   const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 20),
@@ -341,61 +361,146 @@ function buildMain(b, g, it) {
   }
 }
 
+// Холл — как на фото: низкий павильон перед КМК, толстая белая плита-крыша с выносом
+// на тонких колоннах, под ней утопленные стены из стекла и терракоты, ступени к входу.
 function buildHall(b, g, it) {
-  const { x0, x1, y0, y1 } = it.bb, h = b.floors * FH;
-  const glass = mat(PAL.glass, { transparent: true, opacity: .5, roughness: .08, metalness: .35, depthWrite: false });
-  glass.userData.glass = true;
-  const body = box(x0, y0, x1, y1, 0, h, glass, false);
-  g.add(body); it.mats.push(glass); it.meshes.push(body);
-  const mull = mat(dark ? 0xc8d6ef : 0x5b6f92, { metalness: .4, roughness: .4 });
-  const stepX = (x1 - x0) / Math.round((x1 - x0) / 2.1), stepY = (y1 - y0) / Math.round((y1 - y0) / 2.1);
-  for (let x = x0; x <= x1 + .01; x += stepX) [y0, y1].forEach((y) => g.add(box(x - .09, y - .09, x + .09, y + .09, 0, h, mull, false)));
-  for (let y = y0 + stepY; y < y1 - .01; y += stepY) [x0, x1].forEach((x) => g.add(box(x - .09, y - .09, x + .09, y + .09, 0, h, mull, false)));
-  g.add(box(x0, y0 - .09, x1, y0 + .09, FH - .08, FH + .08, mull, false));
-  g.add(box(x0 + .3, y0 + .3, x1 - .3, y1 - .3, FH - .15, FH + .05, mat(dark ? 0x2a3d63 : 0xe8edf5), false));
-  const roof = box(x0 - .5, y0 - .5, x1 + .5, y1 + .5, h, h + .55, roofMat());
-  g.add(roof); it.mats.push(roof.material); it.meshes.push(roof);
+  const { x0, x1, y0, y1 } = it.bb, zr = HALL_H - 1.1, w = x1 - x0;
+  const slab = box(x0, y0, x1, y1, zr, HALL_H, mat(PAL.wall, { roughness: .6 }));
+  it.edges.push(edges(slab));
+  g.add(slab); it.mats.push(slab.material); it.meshes.push(slab);
+  const glass = mat(PAL.glass, { roughness: .12, metalness: .35 });
+  const inner = box(x0 + 1.4, y0 + 2.2, x1 - 1.4, y1, 0, zr, glass, false);
+  g.add(inner); it.mats.push(glass); it.meshes.push(inner);
+  const terra = mat(dark ? 0x8a4a3c : 0xc47862);
+  [[x0 + 1.4, x0 + 1.4 + w * .17], [x1 - 1.4 - w * .17, x1 - 1.4]].forEach(([a, c]) => g.add(box(a, y0 + 2.1, c, y0 + 2.4, 0, zr, terra, false)));
+  const mull = mat(PAL.wall, { roughness: .5 });
+  for (let x = x0 + 1.4 + w * .17; x < x1 - 1.4 - w * .17; x += 2.3) g.add(box(x - .07, y0 + 2.1, x + .07, y0 + 2.25, 0, zr, mull, false));
   const cx = (x0 + x1) / 2, doorMat = mat(dark ? 0x0a1426 : 0x24334f, { metalness: .3 });
-  [-3.2, -1.1, 1.1].forEach((dx) => g.add(box(cx + dx + .1, y0 - .12, cx + dx + 2, y0 + .05, 0, 2.2, doorMat, false)));
-  const white = mat(0xf4f7fb, { roughness: .5 });
-  g.add(box(x0 + 1.2, y0 - 5.2, x1 - 1.2, y0, 3.4, 3.85, white));
-  [x0 + 2.5, x1 - 2.5].forEach((px) => {
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(.22, .22, 3.4, 10), white);
-    col.position.copy(V(px, y0 - 4.6, 1.7)); col.castShadow = true; g.add(col);
-  });
-  g.add(box(x0 + 5, y0 - 5.32, x1 - 5, y0 - 5.18, 3.45, 3.8,
-    new THREE.MeshStandardMaterial({ color: PAL.start, emissive: PAL.start, emissiveIntensity: .7 }), false));
-  g.add(box(x0 + 3, y0 - 1.4, x1 - 3, y0, 0, .22, mat(dark ? 0x31466e : 0xe4e9f1)));
+  [-3, -1, 1].forEach((dx) => g.add(box(cx + dx + .1, y0 + 2.0, cx + dx + 1.8, y0 + 2.15, 0, 2.2, doorMat, false)));
+  const colMat = mat(PAL.wall, { roughness: .5 });
+  const n = Math.round(w / 3.6);
+  for (let k = 0; k <= n; k++) {
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(.24, .24, zr, 10), colMat);
+    col.position.copy(V(x0 + .8 + (w - 1.6) * k / n, y0 + .8, zr / 2)); col.castShadow = true; g.add(col);
+  }
+  g.add(box(x0 + 4, y0 - 2.4, x1 - 4, y0 + .4, 0, .25, mat(dark ? 0x31466e : 0xe6edf6)));
+  g.add(box(cx - 1.6, y0 - .08, cx + 1.6, y0 - .02, zr + .25, zr + .85, mat(PAL.target), false));
 }
 
+// КМК — как на фото: утопленный 1 этаж, сплошная стеклянная лента 2 этажа, вывеска
+// «МОСКОВСКИЙ ГОСУДАРСТВЕННЫЙ СТРОИТЕЛЬНЫЙ УНИВЕРСИТЕТ» и решётка глубоких квадратных окон.
+function kmkFacade(width, floors) {
+  const draw = (emissive) => {
+    const c = document.createElement("canvas"), up = floors - 1;
+    c.width = 128; c.height = 64 * up;
+    const g = c.getContext("2d");
+    g.fillStyle = emissive ? "#000" : PAL.wall; g.fillRect(0, 0, 128, c.height);
+    for (let r = 0; r < up - 1; r++) {                // решётка окон (этажи 3+)
+      const top = r * 64;
+      if (!emissive) { g.fillStyle = "rgba(0,0,0,.07)"; g.fillRect(22, top + 3, 84, 40); }
+      g.fillStyle = emissive ? (Math.random() < (dark ? .2 : 0) ? PAL.winLit : "#0b1430") : PAL.win;
+      g.fillRect(28, top + 7, 76, 33);
+    }
+    const band = (up - 1) * 64;                        // стеклянная лента 2 этажа
+    g.fillStyle = emissive ? "#0b1430" : hex(PAL.glass); g.fillRect(0, band + 4, 128, 56);
+    if (!emissive) { g.fillStyle = PAL.wall; g.fillRect(0, band + 4, 5, 56); g.fillRect(64, band + 4, 3, 56); }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.repeat.set(Math.max(1, Math.round(width / 2.25)), 1);
+    return t;
+  };
+  const o = { map: draw(false), roughness: .85 };
+  if (dark) Object.assign(o, { emissive: 0xffffff, emissiveMap: draw(true), emissiveIntensity: .8 });
+  return new THREE.MeshStandardMaterial(o);
+}
+function buildKMK(b, g, it) {
+  const { x0, x1, y0, y1 } = it.bb, h = b.floors * FH, w = x1 - x0, d = y1 - y0;
+  const glass = mat(PAL.glass, { roughness: .12, metalness: .35 });
+  const ground = box(x0, y0 + 1.6, x1 - 1.6, y1, 0, FH, glass);
+  g.add(ground); it.mats.push(glass); it.meshes.push(ground);
+  const pil = mat(PAL.wall, { roughness: .6 });
+  for (let x = x0 + 1.5; x < x1 - 1.6; x += 3) g.add(box(x - .25, y0 + 1.4, x + .25, y0 + 1.8, 0, FH, pil, false));
+  const soffit = mat(dark ? 0x1a2c4e : 0xdde6f2);
+  const mats = [kmkFacade(d, b.floors), kmkFacade(d, b.floors), roofMat(), soffit, kmkFacade(w, b.floors), kmkFacade(w, b.floors)];
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h - FH, d), mats);
+  body.position.copy(V((x0 + x1) / 2, (y0 + y1) / 2, (h + FH) / 2)); body.castShadow = body.receiveShadow = true;
+  it.edges.push(edges(body));
+  const cornice = box(x0 - .3, y0 - .3, x1 + .3, y1 + .3, h, h + .5, roofMat());
+  g.add(body, cornice); it.mats.push(...mats, cornice.material); it.meshes.push(body, cornice);
+  const sign = textPlane("МОСКОВСКИЙ ГОСУДАРСТВЕННЫЙ СТРОИТЕЛЬНЫЙ УНИВЕРСИТЕТ", 92, 1.3, hex(PAL.target));
+  sign.position.copy(V((x0 + x1) / 2, y0 - .06, 2 * FH + .55)); g.add(sign);
+  for (let i = 0; i < 4; i++) {
+    const bx = x0 + w * (i + .5) / 4;
+    g.add(box(bx - 2, y0 + 7, bx + 2, y0 + 10, h + .5, h + 1.8, mat(dark ? 0x4a6596 : 0xe9eef6)));
+  }
+}
+
+// Ректорат «Свечка»: середина с окнами между двумя глухими пилонами выше неё,
+// на пилонах вертикальные надписи «МГСУ» и «МИСИ», наверху эмблемы.
+function buildTower(b, g, it) {
+  const { x0, x1, y0, y1 } = it.bb, h = b.floors * FH, w = x1 - x0 - 1.4, d = y1 - y0 - 6.4;
+  const mats = [sideMat(d, b.floors), sideMat(d, b.floors), roofMat(), roofMat(), sideMat(w, b.floors), sideMat(w, b.floors)];
+  const mid = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mats);
+  mid.position.copy(V((x0 + x1) / 2, (y0 + y1) / 2, h / 2)); mid.castShadow = mid.receiveShadow = true;
+  it.edges.push(edges(mid)); g.add(mid); it.mats.push(...mats); it.meshes.push(mid);
+  const stone = mat(PAL.wall, { roughness: .6 });
+  [[y0, y0 + 3.2, "МГСУ"], [y1 - 3.2, y1, "МИСИ"]].forEach(([a, c, word]) => {
+    const p = box(x0, a, x1, c, 0, h + 3, stone);
+    it.edges.push(edges(p)); g.add(p); it.mats.push(p.material); it.meshes.push(p);
+    [1, -1].forEach((side) => {                       // буквы на обоих торцах пилона
+      const t = textPlane(word, 2.4, 9.6, hex(PAL.target), true);
+      t.rotation.y = side * Math.PI / 2;
+      t.position.copy(V(side > 0 ? x1 + .06 : x0 - .06, (a + c) / 2, h - 4.2)); g.add(t);
+      const em = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), new THREE.MeshBasicMaterial({ color: PAL.target }));
+      em.rotation.set(0, side * Math.PI / 2, Math.PI / 4);
+      em.position.copy(V(side > 0 ? x1 + .07 : x0 - .07, (a + c) / 2, h + 1.4)); g.add(em);
+    });
+  });
+  const mast = box((x0 + x1) / 2 - .12, (y0 + y1) / 2 - .12, (x0 + x1) / 2 + .12, (y0 + y1) / 2 + .12, h, h + 6, mat(PAL.edge), false);
+  g.add(mast);
+}
+
+// КПА «Ромашка» — как на фото: глухие серые бетонные лепестки-аудитории без окон,
+// приподнятые на колоннах над остеклённым первым этажом.
 function buildFlower(b, g, it) {
-  const h = b.floors * FH, cx = it.cx, cy = it.cy;
-  const core = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, h + 1, 24), sideMat(41, b.floors));
-  core.position.copy(V(cx, cy, (h + 1) / 2)); core.castShadow = core.receiveShadow = true;
-  g.add(core); it.mats.push(core.material); it.meshes.push(core);
+  const cx = it.cx, cy = it.cy, z1 = FH * 1.05, z2 = 2 * FH + 1.6;
+  const glass = mat(PAL.glass, { roughness: .12, metalness: .35 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(9.6, 9.6, z1, 24), glass);
+  base.position.copy(V(cx, cy, z1 / 2)); base.receiveShadow = true;
+  g.add(base); it.mats.push(glass); it.meshes.push(base);
+  const conc = mat(PAL.concrete, { roughness: .95 });
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, z2 + .4 - z1, 24), conc);
+  core.position.copy(V(cx, cy, (z1 + z2 + .4) / 2)); core.castShadow = true;
+  g.add(core); it.mats.push(conc); it.meshes.push(core);
+  const colMat = mat(PAL.concrete);
   for (let k = 0; k < 8; k++) {
     const a = k * Math.PI / 4 + Math.PI / 8;
-    const pm = [sideMat(8, b.floors), sideMat(8, b.floors), roofMat(), roofMat(), sideMat(6, b.floors), sideMat(6, b.floors)];
-    const petal = new THREE.Mesh(new THREE.BoxGeometry(8.5, h, 6.2), pm);
-    petal.position.copy(V(cx + Math.cos(a) * 8.6, cy + Math.sin(a) * 8.6, h / 2));
+    const pm = mat(PAL.concrete, { roughness: .95 });
+    const petal = new THREE.Mesh(new THREE.BoxGeometry(9.2, z2 - z1, 6.4), pm);
+    petal.position.copy(V(cx + Math.cos(a) * 9.2, cy + Math.sin(a) * 9.2, (z1 + z2) / 2));
     petal.rotation.y = a; petal.castShadow = petal.receiveShadow = true;
     it.edges.push(edges(petal));
-    g.add(petal); it.mats.push(...pm); it.meshes.push(petal);
+    g.add(petal); it.mats.push(pm); it.meshes.push(petal);
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(.35, .35, z1, 8), colMat);
+    col.position.copy(V(cx + Math.cos(a) * 12.4, cy + Math.sin(a) * 12.4, z1 / 2)); col.castShadow = true; g.add(col);
   }
   const dome = new THREE.Mesh(new THREE.SphereGeometry(6.6, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2),
     mat(PAL.glass, { roughness: .15, metalness: .3 }));
-  dome.scale.y = .45; dome.position.copy(V(cx, cy, h + 1)); dome.castShadow = true;
+  dome.scale.y = .45; dome.position.copy(V(cx, cy, z2 + .4)); dome.castShadow = true;
   g.add(dome); it.mats.push(dome.material); it.meshes.push(dome);
 }
 
 function buildArena(b, g, it) {
   const { x0, x1, y0, y1 } = it.bb, h = b.floors * FH, w = x1 - x0, d = y1 - y0, r = d / 2;
-  const wm = [sideMat(d, b.floors), sideMat(d, b.floors), roofMat(), roofMat(), sideMat(w, b.floors), sideMat(w, b.floors)];
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wm);
-  walls.position.copy(V(it.cx, it.cy, h / 2)); walls.castShadow = walls.receiveShadow = true;
-  g.add(walls); it.mats.push(...wm); it.meshes.push(walls);
+  // как на фото: остеклённые стены и пологий светло-серый свод
+  const glass = mat(PAL.glass, { roughness: .12, metalness: .35 });
+  const walls = box(x0, y0, x1, y1, 0, h, glass);
+  g.add(walls); it.mats.push(glass); it.meshes.push(walls);
+  const mull = mat(PAL.wall, { roughness: .5 });
+  for (let x = x0; x <= x1 + .01; x += w / Math.round(w / 2.6)) [y0, y1].forEach((y) => g.add(box(x - .1, y - .1, x + .1, y + .1, 0, h, mull, false)));
+  g.add(box(x0 - .2, y0 - .2, x1 + .2, y1 + .2, h - .4, h, mull));
   const vg = new THREE.CylinderGeometry(r, r, w, 40, 1, false, 0, Math.PI); vg.rotateZ(Math.PI / 2);
-  const vault = new THREE.Mesh(vg, mat(dark ? 0x3d6db0 : 0xdfe8f5, { roughness: .45, metalness: .25, side: THREE.DoubleSide }));
+  const vault = new THREE.Mesh(vg, mat(PAL.concrete, { roughness: .5, metalness: .2, side: THREE.DoubleSide }));
   vault.scale.y = X.arenaRise / r; vault.position.copy(V(it.cx, it.cy, h)); vault.castShadow = true;
   g.add(vault); it.mats.push(vault.material); it.meshes.push(vault);
   const rib = mat(dark ? 0x9fc0ee : 0x8fa4c6, { metalness: .4 });
@@ -450,6 +555,8 @@ C.blocks.forEach((b) => {
     it.cx = xs.reduce((a, v) => a + v) / xs.length; it.cy = ys.reduce((a, v) => a + v) / ys.length;
   }
   if (b.kind === "hall") buildHall(b, it.group, it);
+  else if (b.kind === "kmk") buildKMK(b, it.group, it);
+  else if (b.kind === "tower") buildTower(b, it.group, it);
   else if (b.kind === "flower") buildFlower(b, it.group, it);
   else if (b.kind === "arena") buildArena(b, it.group, it);
   else if (b.kind === "construction") buildConstruction(b, it.group, it, b.key === "СТРОЙ");
@@ -559,7 +666,7 @@ function showFloor(key, floor, xRange) {
 const floorsBox = $("#floors");
 function renderFloors(key, active) {
   const it = blocks[key];
-  if (!it || !["main", "flower"].includes(it.b.kind)) { floorsBox.classList.add("hidden"); return; }
+  if (!it || !["main", "flower", "kmk", "tower"].includes(it.b.kind)) { floorsBox.classList.add("hidden"); return; }
   const n = Math.max(it.b.floors, active || 0);
   floorsBox.innerHTML = "";
   floorsBox.appendChild(el("div", "cap", "ЭТАЖ"));

@@ -1220,6 +1220,7 @@ window.CAMPUS = {
    ]
   ],
   "planUnitM": 2.34,
-  "arenaRise": 4.5
+  "arenaRise": 4.5,
+  "hallH": 4.4
  }
 };
