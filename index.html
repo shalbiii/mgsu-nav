@@ -110,7 +110,8 @@ body.dragging .ui { opacity: .35; }
   border-radius: 14px; max-height: calc(100vh - 330px); overflow-y: auto; transition: opacity .25s; }
 .floors.hidden { opacity: 0; pointer-events: none; }
 .floors .cap { font-size: 9px; font-weight: 800; color: var(--muted); text-align: center; letter-spacing: .06em; padding-top: 2px; }
-.floors button { width: 30px; height: 28px; border-radius: 9px; font-weight: 700; font-size: 13px; }
+.floors button { width: 30px; height: 28px; flex: none; border-radius: 9px; font-weight: 700; font-size: 13px; }
+.floors .cap { flex: none; }
 .floors button.on { background: var(--gold); color: var(--gold-ink); }
 
 .sheet { position: absolute; left: 8px; right: 8px; bottom: calc(66px + var(--safe-b)); max-width: 520px; margin: 0 auto;

@@ -676,6 +676,16 @@ function renderFloors(key, active) {
     floorsBox.appendChild(btn);
   }
   floorsBox.classList.remove("hidden");
+  fitFloors();
+  const on = floorsBox.querySelector("button.on");
+  if (on) on.scrollIntoView({ block: "nearest" });
+}
+// панель этажей не должна заезжать под шторку: высота — до её верхнего края, дальше прокрутка
+function fitFloors() {
+  if (floorsBox.classList.contains("hidden")) return;
+  const top = floorsBox.getBoundingClientRect().top;
+  const limit = Math.max(90, sheet.getBoundingClientRect().top - top - 10);
+  if (floorsBox._limit !== limit) { floorsBox.style.maxHeight = limit + "px"; floorsBox._limit = limit; }
 }
 
 // ---------- маршруты ----------
@@ -760,17 +770,61 @@ function flyTo(target, dist, dir, dur) {
   fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: target.clone().add(d.multiplyScalar(dist)),
     t1: target.clone(), start: performance.now(), dur: dur || 900 };
 }
+// Свободная часть экрана в координатах NDC: под поиском, левее кнопок камеры,
+// правее панели этажей и выше шторки. Именно сюда вписываем то, что надо показать.
+function safeRect() {
+  const w = renderer.domElement.clientWidth || window.innerWidth, h = renderer.domElement.clientHeight || window.innerHeight;
+  const tools = $(".tools"), floors = $("#floors");
+  const right = tools ? w - tools.getBoundingClientRect().left + 8 : 60;
+  const left = floors && !floors.classList.contains("hidden") ? floors.getBoundingClientRect().right + 8 : 10;
+  const top = ($(".top") ? $(".top").getBoundingClientRect().bottom : 100) + 10;
+  const bottom = h - sheetTop() + 10;
+  return { x0: -1 + 2 * left / w, x1: 1 - 2 * right / w, y0: -1 + 2 * bottom / h, y1: 1 - 2 * top / h };
+}
+// верх шторки после окончания анимации (свёрнута — 92px, раскрыта — до 46% высоты)
+function sheetTop() {
+  const tab = $("#tabbar") ? window.innerHeight - $("#tabbar").getBoundingClientRect().top + 8 : 70;
+  const hgt = sheet.classList.contains("peek") ? 92 : Math.min(sheet.scrollHeight, window.innerHeight * .46);
+  return window.innerHeight - tab - hgt;
+}
+// Подбирает расстояние и центр так, чтобы все точки целиком попали в свободную область.
 function frame(x0, y0, x1, y1, hgt, opts) {
   opts = opts || {};
-  const span = Math.max(x1 - x0, y1 - y0, hgt || 0, 30);
   let dir = topView ? new THREE.Vector3(0, 1, .02) : (opts.dir || camera.position.clone().sub(controls.target)).clone();
   dir.normalize();
   if (!topView && dir.y < .42) { dir.y = .42; dir.normalize(); }
-  const dist = Math.min(680, Math.max(narrow() ? 160 : 110, span * (narrow() ? 2.7 : 1.7) * (opts.k || 1)));
-  // шторка снизу закрывает часть экрана — сдвигаем центр к камере, чтобы цель была выше
-  const ground = new THREE.Vector3(dir.x, 0, dir.z);
-  const lift = ground.length() > .01 ? ground.normalize().multiplyScalar(dist * (narrow() ? .085 : .03)) : new THREE.Vector3();
-  const center = V((x0 + x1) / 2, (y0 + y1) / 2, (hgt || 0) * .3).add(lift);
+  const pad = Math.max(4, Math.max(x1 - x0, y1 - y0) * .04);
+  const pts = [];
+  [x0 - pad, x1 + pad].forEach((x) => [y0 - pad, y1 + pad].forEach((y) => [0, (hgt || 0) + 2].forEach((z) => pts.push(V(x, y, z)))));
+  const sr = safeRect(), cam = camera.clone(), v = new THREE.Vector3();
+  const fits = (c, d, out) => {
+    cam.position.copy(c).add(dir.clone().multiplyScalar(d)); cam.lookAt(c); cam.updateMatrixWorld();
+    let bx0 = 9, bx1 = -9, by0 = 9, by1 = -9;
+    for (const p of pts) { v.copy(p).project(cam); bx0 = Math.min(bx0, v.x); bx1 = Math.max(bx1, v.x); by0 = Math.min(by0, v.y); by1 = Math.max(by1, v.y); }
+    if (out) Object.assign(out, { bx0, bx1, by0, by1 });
+    return bx0 >= sr.x0 && bx1 <= sr.x1 && by0 >= sr.y0 && by1 <= sr.y1;
+  };
+  let center = V((x0 + x1) / 2, (y0 + y1) / 2, 0), dist = 200;
+  const right = new THREE.Vector3(), fwd = new THREE.Vector3(), b = {};
+  const fitDist = () => {                          // минимальное расстояние, при котором всё влезает
+    let lo = 25, hi = 3000;
+    for (let i = 0; i < 26; i++) { const mid = (lo + hi) / 2; if (fits(center, mid)) hi = mid; else lo = mid; }
+    return hi;
+  };
+  for (let iter = 0; iter < 6; iter++) {
+    dist = fitDist();
+    // сдвигаем центр так, чтобы картинка встала по центру свободной области
+    fits(center, dist, b);
+    const ex = ((b.bx0 + b.bx1) - (sr.x0 + sr.x1)) / 2, ey = ((b.by0 + b.by1) - (sr.y0 + sr.y1)) / 2;
+    if (Math.abs(ex) < .01 && Math.abs(ey) < .01) break;
+    right.setFromMatrixColumn(cam.matrixWorld, 0).setY(0).normalize();
+    fwd.copy(dir).negate().setY(0).normalize();     // «вверх по экрану» на земле
+    const halfH = dist * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+    center.add(right.multiplyScalar(ex * halfH * cam.aspect)).add(fwd.multiplyScalar(ey * halfH / Math.max(.35, dir.y)));
+  }
+  dist = fitDist() * (opts.k && opts.k > 1 ? 1 + (opts.k - 1) * .15 : 1);
+  // в узком окне вписать маршрут можно только издалека — не даём ограничению масштаба обрезать кадр
+  if (dist > controls.maxDistance) controls.maxDistance = Math.ceil(dist * 1.15);
   flyTo(center, dist, dir);
 }
 // на телефоне смотрим вдоль длинного КМК — так кампус помещается в вертикальный экран
@@ -865,7 +919,8 @@ function setSheet(title, sub, tags, body, expanded) {
     <div class="sheet-head" id="sh-head"><div class="tt"><h2>${title}</h2><div class="sub">${sub}</div></div>
       <svg class="i more" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
     ${tags ? `<div class="row">${tags}</div>` : ""}${body || ""}`;
-  sheet.classList.toggle("peek", !expanded);
+  // в невысоком окне (Telegram Desktop ~600px) шторка открывается свёрнутой — карте нужно место
+  sheet.classList.toggle("peek", !(expanded && window.innerHeight >= 700));
   sheet.scrollTop = 0;
   $("#sh-head").onclick = () => { tick(); sheet.classList.toggle("peek"); };
 }
@@ -924,7 +979,9 @@ function selectSport(place) {
   applyFocus([place]);
   showDetour(place);
   sportSheet(place);
-  framePts(X.detour[place].concat(X.blocked), .72, new THREE.Vector3(.35, .9, .25));
+  // обход вытянут вдоль плана (y); в вертикальном окне смотрим с юга — маршрут идёт по высоте экрана
+  const sportDir = camera.aspect < 1 ? new THREE.Vector3(.12, .9, .42) : new THREE.Vector3(.45, .88, .12);
+  framePts(X.detour[place].concat(X.blocked), 1, sportDir);
   haptic("medium");
 }
 function selectPlace(place) {
@@ -1171,11 +1228,16 @@ function loop() {
   const cx = Math.min(LIMIT.x1, Math.max(LIMIT.x0, tgt.x)), cz = Math.min(-LIMIT.y0, Math.max(-LIMIT.y1, tgt.z));
   if (cx !== tgt.x || cz !== tgt.z) { camera.position.x += cx - tgt.x; camera.position.z += cz - tgt.z; tgt.x = cx; tgt.z = cz; }
   controls.update();
+  // туман и дальность прорисовки — по расстоянию камеры, иначе издалека кампус растворяется
+  const cd = camera.position.distanceTo(controls.target);
+  if (scene.fog) { scene.fog.near = Math.max(520, cd * 1.1); scene.fog.far = Math.max(1000, cd * 2.4); }
+  if (camera.far < cd * 3) { camera.far = cd * 3; camera.updateProjectionMatrix(); }
   needle.style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
   flows.forEach((f) => f.dots.forEach((d) => d.position.copy(f.path.getPointAt((d.userData.u + t * f.speed) % 1))));
   if (startRing) { const s = 1 + .35 * Math.sin(t * 4); startRing.scale.set(s, s, s); }
   if (floorPulse) floorPulse.material.opacity = .55 + .3 * Math.sin(t * 3.2);
   renderer.render(scene, camera);
+  fitFloors();
   placeLabels();
 }
 
