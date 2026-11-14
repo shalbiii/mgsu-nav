@@ -12,10 +12,11 @@ const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls)
 
 // ---------- тема и Telegram ----------
 const inTelegram = !!(tg && tg.initData);
-const dark = inTelegram && tg.colorScheme ? tg.colorScheme === "dark"
-  : window.matchMedia("(prefers-color-scheme: dark)").matches;
+// Мини-приложение выглядит так же, как картинки бота (render.py): всегда светлая
+// схема по эмблеме МГСУ, независимо от темы Telegram.
+const dark = false;
 document.documentElement.dataset.theme = dark ? "dark" : "light";
-const BG = dark ? "#061229" : "#EEF2F8";
+const BG = "#F7FAFE";
 if (tg) {
   tg.ready(); tg.expand();
   try { tg.setHeaderColor(BG); tg.setBackgroundColor(BG); } catch (e) {}
@@ -34,12 +35,13 @@ const PAL = dark ? {
   tree: 0x2f7d66, trunk: 0x5a4436, concrete: 0x93a2ba, crane: 0x6cb8f0, detour: 0xff8a3d, blocked: 0xf87171,
   pitch: 0x226f55, hemiSky: 0xb6d4ff, hemiGround: 0x0b1830, hemi: .65, sun: .8,
 } : {
-  bg: 0xf3f7fc, ground: 0xe5eef9, grid1: 0xd2e0f2, grid2: 0xdde8f5,
-  wall: "#fbfdff", win: "#bcd6f2", winLit: "#bcd6f2", roof: 0xffffff, edge: 0xa9c1e0, edgeOp: .95,
+  // точные цвета из render.py (палитра картинок бота)
+  bg: 0xe1ecfa, bgTop: "#F7FAFE", bgBottom: "#E1ECFA", ground: 0xe1ecfa, grid1: 0xc4d6ee, grid2: 0xd3e1f3,
+  wall: "#EEF4FC", win: "#A8C6EA", winLit: "#A8C6EA", roof: 0xffffff, edge: 0xa0b9de, edgeOp: 1,
   accent: 0x2e62b0, accentRoof: 0x4fa3e0, floor: 0x4fa3e0, route: 0x2f8fe0, start: 0x169ec4,
-  target: 0x1d3b6f, glass: 0xa6cff5, park: 0xdcefe6, road: 0xcad7e8, pave: 0xffffff, dirt: 0xd6c4a6,
-  tree: 0x62aa82, trunk: 0x8a6e58, concrete: 0xbac4d4, crane: 0x2e62b0, detour: 0xf07a2a, blocked: 0xe5484d,
-  pitch: 0x8fcca8, hemiSky: 0xffffff, hemiGround: 0xbfd0e6, hemi: .84, sun: 1.0,
+  target: 0x1d3b6f, glass: 0x96c3f0, park: 0xd8ece4, road: 0xcfdcee, pave: 0xffffff, dirt: 0xd6c4a6,
+  tree: 0x62aa82, trunk: 0x8a6e58, concrete: 0xbac2d0, crane: 0x2e62b0, detour: 0xf07a2a, blocked: 0xe5484d,
+  pitch: 0x8fcca8, hemiSky: 0xffffff, hemiGround: 0xdbe6f5, hemi: .82, sun: .32,
 };
 
 // ---------- поиск (как в navigator.py) ----------
@@ -174,9 +176,29 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 host.appendChild(renderer.domElement);
 
+// Цвета палитры заданы в sRGB, а three.js считает свет в линейном пространстве и
+// на выходе (outputEncoding = sRGB) осветляет их ещё раз — тёмно-синий выцветал
+// в серо-голубой. Переводим все цвета материалов в линейное пространство.
+const lin = (c) => new THREE.Color(c).convertSRGBToLinear();
+const setValues0 = THREE.Material.prototype.setValues;
+THREE.Material.prototype.setValues = function (v) {
+  setValues0.call(this, v);
+  if (!v) return;
+  if (v.color !== undefined && this.color) this.color.convertSRGBToLinear();
+  if (v.emissive !== undefined && this.emissive) this.emissive.convertSRGBToLinear();
+};
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(PAL.bg);
-scene.fog = new THREE.Fog(PAL.bg, 520, 1000);
+// фон — вертикальный градиент, как на картинках бота (BG_TOP → BG_BOTTOM)
+scene.background = (() => {
+  const c = document.createElement("canvas"); c.width = 2; c.height = 256;
+  const g = c.getContext("2d"), gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, PAL.bgTop); gr.addColorStop(1, PAL.bgBottom);
+  g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  return t;
+})();
+scene.fog = new THREE.Fog(lin(PAL.bg), 520, 1000);
 const camera = new THREE.PerspectiveCamera(36, 1, 1, 2500);
 // Управление как в картах: один палец / левая кнопка — двигать карту,
 // два пальца — масштаб и поворот, правая кнопка (или Shift) — поворот и наклон.
@@ -233,7 +255,7 @@ scene.add(env);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), mat(PAL.ground, { roughness: 1 }));
 ground.rotation.x = -Math.PI / 2; ground.position.set(CENTER.x, 0, CENTER.z); ground.receiveShadow = true;
 env.add(ground);
-const grid = new THREE.GridHelper(560, 56, PAL.grid1, PAL.grid2);
+const grid = new THREE.GridHelper(560, 56, lin(PAL.grid1), lin(PAL.grid2));
 grid.position.set(CENTER.x, .02, CENTER.z); grid.material.transparent = true; grid.material.opacity = .55;
 env.add(grid);
 env.add(flat(X.road, PAL.road, .03));
@@ -609,7 +631,7 @@ function placeLabels() {
 }
 
 // ---------- подсветка ----------
-const ACC = new THREE.Color(PAL.accent), ACC_ROOF = new THREE.Color(PAL.accentRoof), WHITE = new THREE.Color(0xffffff);
+const ACC = lin(PAL.accent), ACC_ROOF = lin(PAL.accentRoof), WHITE = new THREE.Color(0xffffff);
 let focusKeys = null;
 function applyFocus(keys) {
   focusKeys = keys && keys.length ? new Set(keys) : null;
@@ -620,7 +642,6 @@ function applyFocus(keys) {
     it.mats.forEach((m) => {
       const roof = m.map == null && !m.userData.glass;
       m.color.copy(on ? (roof ? ACC_ROOF : ACC) : m.userData.base);
-      if (on && !roof && !dark) m.color.lerp(WHITE, .35);
       m.transparent = dim || !!m.userData.glass;
       m.opacity = dim ? .2 : (m.userData.glass ? .5 : 1);
       m.depthWrite = !dim && !m.userData.glass;
